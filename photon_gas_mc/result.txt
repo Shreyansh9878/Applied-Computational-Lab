@@ -1,0 +1,9 @@
+ How Many Cycles (x         1000 )                       
+1000
+ How Many Initialization Cycles ? (x         1000 )
+500
+ Beta*Epsilon ? (Example: 1.0d0)
+1.0d0
+ Average Value     :   0.57936399999999999     
+ Theoretical Value :   0.58197670686932645     
+ Relative Error    :    4.4893667366537847E-003
