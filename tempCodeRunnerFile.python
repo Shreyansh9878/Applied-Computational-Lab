@@ -1,0 +1,122 @@
+import json
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+# --- 1. Define File Path ---
+# I've set this to the path from your error message.
+# The 'r' before the string handles the backslashes '\' correctly.
+file_path = r"E:\Desktop\SEM5\Thin film\G3_ZnO.pssession"
+
+# You can also uncomment the line below to type the path manually each time
+# file_path = input(r"Please enter the FULL path to your .pssession file: ")
+
+print(f"Attempting to load file: {file_path}")
+
+# --- 2. Load the JSON file (with robust encoding handling) ---
+data = None
+# We will try common encodings. 'utf-8-sig' handles a BOM (Byte Order Mark)
+# which can sometimes cause decode errors.
+encodings_to_try = ['utf-8', 'utf-8-sig', 'latin-1'] 
+
+for encoding in encodings_to_try:
+    try:
+        with open(file_path, 'r', encoding=encoding) as f:
+            data = json.load(f)
+        print(f"File loaded successfully with '{encoding}' encoding.")
+        break  # Stop if loading was successful
+    except FileNotFoundError:
+        print(f"Error: File not found at '{file_path}'")
+        print("Please check the path and try again.")
+        exit()
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        print(f"Failed to load with '{encoding}' encoding...")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+        exit()
+
+# Check if loading failed with all encodings
+if data is None:
+    print("\nError: Could not decode the file as JSON with any attempted encoding.")
+    print("The file may be corrupt or not a valid JSON file.")
+    exit()
+
+# --- 3. Extract Data from the JSON Structure ---
+try:
+    # Navigate to the list of data arrays
+    # Structure: Measurements[0] -> DataSet -> Values
+    data_arrays = data['Measurements'][0]['DataSet']['Values']
+
+    potential_data = None
+    current_data = None
+
+    # Loop through the arrays to find the correct ones by description
+    for array in data_arrays:
+        if array.get('Description') == 'potential':
+            potential_data = array['DataValues']
+        elif array.get('Description') == 'current':
+            current_data = array['DataValues']
+
+    if potential_data is None or current_data is None:
+        print("Error: Could not find 'potential' or 'current' data arrays in the file.")
+        print("Please check the file structure.")
+        exit()
+
+    # Get the actual values. The data is stored in a key 'V' for both.
+    voltages = [point['V'] for point in potential_data]
+    currents = [point['V'] for point in current_data]
+    
+    print("Data extracted successfully.")
+
+    # --- 4. Load into Pandas DataFrame ---
+    df = pd.DataFrame({
+        'Voltage (V)': voltages,
+        'Current (I)': currents
+    })
+
+    print("\n--- DataFrame Head ---")
+    print(df.head())
+    print("----------------------\n")
+
+    # --- 5. Generate Plots from DataFrame ---
+    print("Generating plots...")
+
+    # Create a new column for log10(I)
+    # We only want to plot where Current > 0
+    df['log10(I)'] = np.nan # Initialize column
+    
+    # Find rows where current is positive and calculate log10
+    positive_current_mask = df['Current (I)'] > 0
+    df.loc[positive_current_mask, 'log10(I)'] = np.log10(df.loc[positive_current_mask, 'Current (I)'])
+
+    # Create a 1x2 grid for the plots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+
+    # Plot 1: I vs V
+    ax1.plot(df['Voltage (V)'], df['Current (I)'], label='I vs. V')
+    ax1.set_xlabel('Voltage (V)')
+    ax1.set_ylabel('Current (I)')
+    ax1.set_title('I vs. V Plot')
+    ax1.grid(True)
+    ax1.legend()
+
+    # Plot 2: log(I) vs V
+    # Filter out non-positive currents (which are 'NaN' in the log10 column)
+    plot_df_log = df.dropna(subset=['log10(I)'])
+    
+    ax2.plot(plot_df_log['Voltage (V)'], plot_df_log['log10(I)'], 'r-', label='log(I) vs. V')
+    ax2.set_xlabel('Voltage (V)')
+    ax2.set_ylabel('log10(Current)')
+    ax2.set_title('log(I) vs. V Plot')
+    ax2.grid(True)
+    ax2.legend()
+
+    # Show the plots
+    plt.tight_layout()
+    plt.show()
+
+except KeyError as e:
+    print(f"Error: Could not find an expected key in the JSON file: {e}")
+    print("This means the file's structure (e.g., 'Measurements', 'DataSet') is different than expected.")
+except Exception as e:
+    print(f"An error occurred during data processing or plotting: {e}")
